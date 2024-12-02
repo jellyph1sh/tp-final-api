@@ -18,9 +18,9 @@ type VisitEntry struct {
 
 type VisitEntryRepository interface {
 	Create(entry *VisitEntry) (*VisitEntry, error)
-	FindAll() ([]*VisitEntry, error)
+	FindAll(date string, doctor string, reason string) ([]*VisitEntry, error)
 	FindById(id int) (*VisitEntry, error)
-	FindAllByCatId(catId int) ([]*VisitEntry, error)
+	FindAllByCatId(catId int, date string, doctor string, reason string) ([]*VisitEntry, error)
 	Update(entry *VisitEntry) (*VisitEntry, error)
 	Delete(id int) (bool, error)
 	ToModel(entry *VisitEntry) *model.VisitResponse
@@ -42,9 +42,21 @@ func (r *visitEntryRepository) Create(entry *VisitEntry) (*VisitEntry, error) {
 	return entry, nil
 }
 
-func (r *visitEntryRepository) FindAll() ([]*VisitEntry, error) {
+func (r *visitEntryRepository) FindAll(date string, doctor string, reason string) ([]*VisitEntry, error) {
+	query := r.db
+
+	if date != "" {
+		query = query.Where("date = ?", date)
+	}
+	if doctor != "" {
+		query = query.Where("doctor = ?", doctor)
+	}
+	if reason != "" {
+		query = query.Where("reason = ?", reason)
+	}
+
 	var entries []*VisitEntry
-	if err := r.db.Preload("Cat").Find(&entries).Error; err != nil {
+	if err := query.Find(&entries).Error; err != nil {
 		return nil, err
 	}
 	return entries, nil
@@ -52,15 +64,27 @@ func (r *visitEntryRepository) FindAll() ([]*VisitEntry, error) {
 
 func (r *visitEntryRepository) FindById(id int) (*VisitEntry, error) {
 	var entry *VisitEntry
-	if err := r.db.Preload("Cat").Where("id = ?", id).Find(&entry).Error; err != nil {
+	if err := r.db.Where("id = ?", id).Find(&entry).Error; err != nil {
 		return nil, err
 	}
 	return entry, nil
 }
 
-func (r *visitEntryRepository) FindAllByCatId(catId int) ([]*VisitEntry, error) {
+func (r *visitEntryRepository) FindAllByCatId(catId int, date string, doctor string, reason string) ([]*VisitEntry, error) {
+	query := r.db.Where("cat_id = ?", catId)
+
+	if date != "" {
+		query = query.Where("date = ?", date)
+	}
+	if doctor != "" {
+		query = query.Where("doctor = ?", doctor)
+	}
+	if reason != "" {
+		query = query.Where("reason = ?", reason)
+	}
+
 	var entries []*VisitEntry
-	if err := r.db.Preload("Cat").Where("cat_id = ?", catId).Find(&entries).Error; err != nil {
+	if err := query.Find(&entries).Error; err != nil {
 		return nil, err
 	}
 	return entries, nil

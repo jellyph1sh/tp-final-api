@@ -129,7 +129,11 @@ func (config *CatConfig) GetHistoryByCatHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	visitEntries, err := config.VisitEntryRepository.FindAllByCatId(id)
+	date := r.URL.Query().Get("date")
+	doctor := r.URL.Query().Get("doctor")
+	reason := r.URL.Query().Get("reason")
+
+	visitEntries, err := config.VisitEntryRepository.FindAllByCatId(id, date, doctor, reason)
 	if err != nil {
 		http.Error(w, "Failed to retrieve visits for this catId", http.StatusInternalServerError)
 		return
@@ -168,19 +172,39 @@ func (config *CatConfig) GetVisitsByCatHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	entries, err := config.VisitEntryRepository.FindAllByCatId(id)
+	date := r.URL.Query().Get("date")
+	doctor := r.URL.Query().Get("doctor")
+	reason := r.URL.Query().Get("reason")
+
+	visitEntries, err := config.VisitEntryRepository.FindAllByCatId(id, date, doctor, reason)
 	if err != nil {
 		http.Error(w, "Failed to retrieve visits for this catId", http.StatusInternalServerError)
 		return
 	}
 
-	responseEntries := make([]*model.VisitResponse, len(entries))
+	VisitHistoryResponseEntries := make([]*model.VisitHistoryResponse, len(visitEntries))
 
-	for i, entry := range entries {
-		responseEntries[i] = config.VisitEntryRepository.ToModel(entry)
+	for i, visitEntry := range visitEntries {
+		VisitHistoryResponseEntries[i] = config.VisitEntryRepository.ToHistoryModel(visitEntry)
 	}
 
-	render.JSON(w, r, responseEntries)
+	for i, entry := range VisitHistoryResponseEntries {
+		treatmentEntries, err := config.TreatmentEntryRepository.FindAllByVisitId(int(entry.ID))
+		if err != nil {
+			http.Error(w, "Failed to retrieve treatments for this visitId", http.StatusInternalServerError)
+			return
+		}
+
+		treatmentResponseEntries := make([]*model.TreatmentResponse, len(treatmentEntries))
+
+		for i, treatmentEntry := range treatmentEntries {
+			treatmentResponseEntries[i] = config.TreatmentEntryRepository.ToModel(treatmentEntry)
+		}
+
+		VisitHistoryResponseEntries[i].Treatments = treatmentResponseEntries
+	}
+
+	render.JSON(w, r, VisitHistoryResponseEntries)
 }
 
 func (config *CatConfig) GetVisitByCatHandler(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +233,23 @@ func (config *CatConfig) GetVisitByCatHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	render.JSON(w, r, config.VisitEntryRepository.ToModel(entry))
+	historyEntry := config.VisitEntryRepository.ToHistoryModel(entry)
+
+	treatmentEntries, err := config.TreatmentEntryRepository.FindAllByVisitId(int(historyEntry.ID))
+	if err != nil {
+		http.Error(w, "Failed to retrieve treatments for this visitId", http.StatusInternalServerError)
+		return
+	}
+
+	treatmentResponseEntries := make([]*model.TreatmentResponse, len(treatmentEntries))
+
+	for i, treatmentEntry := range treatmentEntries {
+		treatmentResponseEntries[i] = config.TreatmentEntryRepository.ToModel(treatmentEntry)
+	}
+
+	historyEntry.Treatments = treatmentResponseEntries
+
+	render.JSON(w, r, historyEntry)
 }
 
 func (config *CatConfig) GetTreatmentsByCatByVisitHandler(w http.ResponseWriter, r *http.Request) {

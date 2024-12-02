@@ -33,19 +33,39 @@ func (config *VisitConfig) CreateVisitHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (config *VisitConfig) GetAllVisitsHandler(w http.ResponseWriter, r *http.Request) {
-	entries, err := config.VisitEntryRepository.FindAll()
+	date := r.URL.Query().Get("date")
+	doctor := r.URL.Query().Get("doctor")
+	reason := r.URL.Query().Get("reason")
+
+	entries, err := config.VisitEntryRepository.FindAll(date, doctor, reason)
 	if err != nil {
 		http.Error(w, "Failed to retrieve all visits", http.StatusInternalServerError)
 		return
 	}
 
-	responseEntries := make([]*model.VisitResponse, len(entries))
+	VisitHistoryResponseEntries := make([]*model.VisitHistoryResponse, len(entries))
 
 	for i, entry := range entries {
-		responseEntries[i] = config.VisitEntryRepository.ToModel(entry)
+		VisitHistoryResponseEntries[i] = config.VisitEntryRepository.ToHistoryModel(entry)
 	}
 
-	render.JSON(w, r, responseEntries)
+	for i, entry := range VisitHistoryResponseEntries {
+		treatmentEntries, err := config.TreatmentEntryRepository.FindAllByVisitId(int(entry.ID))
+		if err != nil {
+			http.Error(w, "Failed to retrieve treatments for this visitId", http.StatusInternalServerError)
+			return
+		}
+
+		treatmentResponseEntries := make([]*model.TreatmentResponse, len(treatmentEntries))
+
+		for i, treatmentEntry := range treatmentEntries {
+			treatmentResponseEntries[i] = config.TreatmentEntryRepository.ToModel(treatmentEntry)
+		}
+
+		VisitHistoryResponseEntries[i].Treatments = treatmentResponseEntries
+	}
+
+	render.JSON(w, r, VisitHistoryResponseEntries)
 }
 
 func (config *VisitConfig) GetVisitByIdHandler(w http.ResponseWriter, r *http.Request) {
@@ -61,8 +81,23 @@ func (config *VisitConfig) GetVisitByIdHandler(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Failed to retrieve a visit on this id", http.StatusInternalServerError)
 		return
 	}
+	historyEntry := config.VisitEntryRepository.ToHistoryModel(entry)
 
-	render.JSON(w, r, config.VisitEntryRepository.ToModel(entry))
+	treatmentEntries, err := config.TreatmentEntryRepository.FindAllByVisitId(int(historyEntry.ID))
+	if err != nil {
+		http.Error(w, "Failed to retrieve treatments for this visitId", http.StatusInternalServerError)
+		return
+	}
+
+	treatmentResponseEntries := make([]*model.TreatmentResponse, len(treatmentEntries))
+
+	for i, treatmentEntry := range treatmentEntries {
+		treatmentResponseEntries[i] = config.TreatmentEntryRepository.ToModel(treatmentEntry)
+	}
+
+	historyEntry.Treatments = treatmentResponseEntries
+
+	render.JSON(w, r, historyEntry)
 }
 
 func (config *VisitConfig) UpdateVisitHandler(w http.ResponseWriter, r *http.Request) {
